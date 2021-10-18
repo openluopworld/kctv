@@ -1,0 +1,554 @@
+diff --git a/crypto/cfb.c b/crypto/cfb.c
+index a0d68c0..9edbbaf 100644
+--- a/crypto/cfb.c
++++ b/crypto/cfb.c
+@@ -75,7 +75,23 @@ static int crypto_cfb_encrypt_segment(struct skcipher_walk *walk,
+ 	u8 *iv = walk->iv;
+ 
+ 	do {
++#if 0
++    if (bsize == 16) {
++        pr_info("cfb plain1:  %02x %02x %02x %02x %02x %02x %02x %02x\n",
++            iv[0], iv[1], iv[2], iv[3], iv[4], iv[5], iv[6], iv[7]);
++        pr_info("cfb plain2:  %02x %02x %02x %02x %02x %02x %02x %02x\n",
++            iv[8], iv[9], iv[10], iv[11], iv[12], iv[13], iv[14], iv[15]);
++    }
++#endif
+ 		crypto_cfb_encrypt_one(tfm, iv, dst);
++#if 0
++    if (bsize == 16) {
++        pr_info("cfb cipher1: %02x %02x %02x %02x %02x %02x %02x %02x\n",
++            dst[0], dst[1], dst[2], dst[3], dst[4], dst[5], dst[6], dst[7]);
++        pr_info("cfb cipher2: %02x %02x %02x %02x %02x %02x %02x %02x\n",
++            dst[8], dst[9], dst[10], dst[11], dst[12], dst[13], dst[14], dst[15]);
++    }
++#endif
+ 		crypto_xor(dst, src, bsize);
+ 		memcpy(iv, dst, bsize);
+ 
+@@ -144,7 +160,7 @@ static int crypto_cfb_decrypt_segment(struct skcipher_walk *walk,
+ 
+ 	do {
+ 		crypto_cfb_encrypt_one(tfm, iv, dst);
+-		crypto_xor(dst, iv, bsize);
++		crypto_xor(dst, src, bsize);
+ 		iv = src;
+ 
+ 		src += bsize;
+diff --git a/crypto/testmgr.c b/crypto/testmgr.c
+old mode 100644
+new mode 100755
+index a1d4224..92e529d
+--- a/crypto/testmgr.c
++++ b/crypto/testmgr.c
+@@ -38,7 +38,7 @@
+ #include "internal.h"
+ 
+ static bool notests;
+-module_param(notests, bool, 0644);
++module_param(notests, bool, 0);
+ MODULE_PARM_DESC(notests, "disable crypto self-tests");
+ 
+ #ifdef CONFIG_CRYPTO_MANAGER_DISABLE_TESTS
+@@ -2661,6 +2661,13 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.suite = {
+ 			.cipher = __VECS(serpent_cbc_tv_template)
+ 		},
++	}, {
++		.alg = "cbc(sm4-osr)",
++		.test = alg_test_skcipher,
++		.fips_allowed = 1,
++		.suite = {
++			.cipher = __VECS(sm4_cbc_tv_template)
++		},
+ 	}, {
+ 		.alg = "cbc(twofish)",
+ 		.test = alg_test_skcipher,
+@@ -2684,6 +2691,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 				.dec = __VECS(aes_ccm_dec_tv_template)
+ 			}
+ 		}
++	}, {
++		.alg = "cfb(sm4-osr)",
++		.test = alg_test_skcipher,
++		.suite = {
++			.cipher = __VECS(sm4_cfb_tv_template)
++		}
+ 	}, {
+ 		.alg = "chacha20",
+ 		.test = alg_test_skcipher,
+@@ -2784,6 +2797,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.suite = {
+ 			.cipher = __VECS(serpent_ctr_tv_template)
+ 		}
++	}, {
++		.alg = "ctr(sm4-osr)",
++		.test = alg_test_skcipher,
++		.suite = {
++			.cipher = __VECS(sm4_ctr_tv_template)
++		}
+ 	}, {
+ 		.alg = "ctr(twofish)",
+ 		.test = alg_test_skcipher,
+@@ -3037,6 +3056,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.suite = {
+ 			.cipher = __VECS(sm4_tv_template)
+ 		}
++	}, {
++		.alg = "ecb(sm4-osr)",
++		.test = alg_test_skcipher,
++		.suite = {
++			.cipher = __VECS(sm4_tv_template)
++		}
+ 	}, {
+ 		.alg = "ecb(speck128)",
+ 		.test = alg_test_skcipher,
+@@ -3305,6 +3330,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.alg = "ofb(paes)",
+ 		.test = alg_test_null,
+ 		.fips_allowed = 1,
++	}, {
++		.alg = "ofb(sm4-osr)",
++		.test = alg_test_skcipher,
++		.suite = {
++			.cipher = __VECS(sm4_ofb_tv_template)
++		}
+ 	}, {
+ 		.alg = "pcbc(fcrypt)",
+ 		.test = alg_test_skcipher,
+@@ -3343,6 +3374,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.suite = {
+ 			.cipher = __VECS(aes_ctr_rfc3686_tv_template)
+ 		}
++	}, {
++		.alg = "rfc3686(ctr(sm4-osr))",
++		.test = alg_test_skcipher,
++		.suite = {
++			.cipher = __VECS(sm4_ctr_rfc3686_tv_template)
++		}
+ 	}, {
+ 		.alg = "rfc4106(gcm(aes))",
+ 		.test = alg_test_aead,
+@@ -3490,12 +3527,30 @@ static const struct alg_test_desc alg_test_descs[] = {
+ 		.suite = {
+ 			.hash = __VECS(sha512_tv_template)
+ 		}
++	}, {
++		.alg = "sm2",
++		.test = alg_test_akcipher,
++		.suite = {
++			.akcipher = __VECS(sm2_tv_template)
++		}
++	}, {
++		.alg = "sm2-osr",
++		.test = alg_test_akcipher,
++		.suite = {
++			.akcipher = __VECS(sm2_tv_template)
++		}
+ 	}, {
+ 		.alg = "sm3",
+ 		.test = alg_test_hash,
+ 		.suite = {
+ 			.hash = __VECS(sm3_tv_template)
+ 		}
++	}, {
++		.alg = "sm3-osr",
++		.test = alg_test_hash,
++		.suite = {
++			.hash = __VECS(sm3_tv_template)
++		}
+ 	}, {
+ 		.alg = "tgr128",
+ 		.test = alg_test_hash,
+@@ -3631,7 +3686,6 @@ static void alg_test_descs_check_order(void)
+ {
+ 	int i;
+ 
+-	/* only check once */
+ 	if (alg_test_descs_checked)
+ 		return;
+ 
+@@ -3690,6 +3744,9 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
+ 		return 0;
+ 	}
+ 
++        if (!driver || !alg || !strstr(driver, "-osr"))
++            return 0;
++
+ 	alg_test_descs_check_order();
+ 
+ 	if ((type & CRYPTO_ALG_TYPE_MASK) == CRYPTO_ALG_TYPE_CIPHER) {
+@@ -3726,7 +3783,6 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
+ 	if (j >= 0 && j != i)
+ 		rc |= alg_test_descs[j].test(alg_test_descs + j, driver,
+ 					     type, mask);
+-
+ test_done:
+ 	if (fips_enabled && rc)
+ 		panic("%s: %s alg self test failed in fips mode!\n", driver, alg);
+@@ -3734,6 +3790,11 @@ test_done:
+ 	if (fips_enabled && !rc)
+ 		pr_info("alg: self-tests for %s (%s) passed\n", driver, alg);
+ 
++        if (rc)
++            pr_info("alg: test for %s (%s) failed\n", driver, alg);
++        else
++            pr_info("alg: test for %s (%s) passed\n", driver, alg);
++
+ 	return rc;
+ 
+ notest:
+@@ -3746,3 +3807,4 @@ non_fips_alg:
+ #endif /* CONFIG_CRYPTO_MANAGER_DISABLE_TESTS */
+ 
+ EXPORT_SYMBOL_GPL(alg_test);
++
+diff --git a/crypto/testmgr.h b/crypto/testmgr.h
+old mode 100644
+new mode 100755
+index 173111c..3c873fe
+--- a/crypto/testmgr.h
++++ b/crypto/testmgr.h
+@@ -2309,6 +2309,61 @@ static const struct hash_testvec crct10dif_tv_template[] = {
+ 	}
+ };
+ 
++/*
++ * SM2 test vectors.
++ */
++static const struct akcipher_testvec sm2_tv_template[] = {
++	{ /* Generated from openssl */
++	.key =
++	"\x04"
++	"\x8e\xa0\x33\x69\x91\x7e\x3d\xec\xad\x8e\xf0\x45\x5e\x13\x3e\x68"
++	"\x5b\x8c\xab\x5c\xc6\xc8\x50\xdf\x91\x00\xe0\x24\x73\x4d\x31\xf2"
++	"\x2e\xc0\xd5\x6b\xee\xda\x98\x93\xec\xd8\x36\xaa\xb9\xcf\x63\x82"
++	"\xef\xa7\x1a\x03\xed\x16\xba\x74\xb8\x8b\xf9\xe5\x70\x39\xa4\x70",
++	.key_len = 65,
++	.c =
++	"\x30\x45"
++	"\x02\x20"
++	"\x70\xab\xb6\x7d\xd6\x54\x80\x64\x42\x7e\x2d\x05\x08\x36\xc9\x96"
++	"\x25\xc2\xbb\xff\x08\xe5\x43\x15\x5e\xf3\x06\xd9\x2b\x2f\x0a\x9f"
++	"\x02\x21"
++	"\x00"
++	"\xbf\x21\x5f\x7e\x5d\x3f\x1a\x4d\x8f\x84\xc2\xe9\xa6\x4c\xa4\x18"
++	"\xb2\xb8\x46\xf4\x32\x96\xfa\x57\xc6\x29\xd4\x89\xae\xcc\xda\xdb",
++	.c_size = 71,
++	.m =
++	"\x47\xa7\xbf\xd3\xda\xc4\x79\xee\xda\x8b\x4f\xe8\x40\x94\xd4\x32"
++	"\x8f\xf1\xcd\x68\x4d\xbd\x9b\x1d\xe0\xd8\x9a\x5d\xad\x85\x47\x5c",
++	.m_size = 32,
++	.public_key_vec = true,
++	.siggen_sigver_test = true,
++	},
++	{ /* From libgcrypt */
++	.key =
++	"\x04"
++	"\x87\x59\x38\x9a\x34\xaa\xad\x07\xec\xf4\xe0\xc8\xc2\x65\x0a\x44"
++	"\x59\xc8\xd9\x26\xee\x23\x78\x32\x4e\x02\x61\xc5\x25\x38\xcb\x47"
++	"\x75\x28\x10\x6b\x1e\x0b\x7c\x8d\xd5\xff\x29\xa9\xc8\x6a\x89\x06"
++	"\x56\x56\xeb\x33\x15\x4b\xc0\x55\x60\x91\xef\x8a\xc9\xd1\x7d\x78",
++	.key_len = 65,
++	.c =
++	"\x30\x44"
++	"\x02\x20"
++	"\xd9\xec\xef\xe8\x5f\xee\x3c\x59\x57\x8e\x5b\xab\xb3\x02\xe1\x42"
++	"\x4b\x67\x2c\x0b\x26\xb6\x51\x2c\x3e\xfc\xc6\x49\xec\xfe\x89\xe5"
++	"\x02\x20"
++	"\x43\x45\xd0\xa5\xff\xe5\x13\x27\x26\xd0\xec\x37\xad\x24\x1e\x9a"
++	"\x71\x9a\xa4\x89\xb0\x7e\x0f\xc4\xbb\x2d\x50\xd0\xe5\x7f\x7a\x68",
++	.c_size = 70,
++	.m =
++	"\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff\x00"
++	"\x12\x34\x56\x78\x9a\xbc\xde\xf0\x12\x34\x56\x78\x9a\xbc\xde\xf0",
++	.m_size = 32,
++	.public_key_vec = true,
++	.siggen_sigver_test = true,
++	},
++};
++
+ /* Example vectors below taken from
+  * http://www.oscca.gov.cn/UpFile/20101222141857786.pdf
+  *
+@@ -2333,7 +2388,6 @@ static const struct hash_testvec sm3_tv_template[] = {
+ 			0x7E, 0x76, 0x4A, 0x91, 0xA1, 0x8C, 0xCB, 0x82,
+ 			0xF1, 0x91, 0x7A, 0x29, 0xC8, 0x6C, 0x5E, 0x88 }
+ 	}, {
+-		/* A.1. Example 1 */
+ 		.plaintext = "abc",
+ 		.psize = 3,
+ 		.digest = (u8 *)(u8 []) {
+@@ -2350,7 +2404,6 @@ static const struct hash_testvec sm3_tv_template[] = {
+ 			0x40, 0x46, 0x2A, 0xD2, 0x8D, 0xCC, 0x6D, 0x63,
+ 			0xAD, 0xB2, 0x4D, 0x5C, 0x20, 0xA6, 0x15, 0x95 }
+ 	}, {
+-		/* A.1. Example 2 */
+ 		.plaintext = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdab"
+ 			     "cdabcdabcdabcdabcd",
+ 		.psize = 64,
+@@ -10138,7 +10191,7 @@ static const struct cipher_testvec serpent_xts_tv_template[] = {
+  */
+ 
+ static const struct cipher_testvec sm4_tv_template[] = {
+-	{ /* SM4 Appendix A: Example Calculations. Example 1. */
++	{ /* GB/T 32907-2016 Example 1. */
+ 		.key	= "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
+ 			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
+ 		.klen	= 16,
+@@ -10147,10 +10200,7 @@ static const struct cipher_testvec sm4_tv_template[] = {
+ 		.ctext	= "\x68\x1E\xDF\x34\xD2\x06\x96\x5E"
+ 			  "\x86\xB3\xE9\x4F\x53\x6E\x42\x46",
+ 		.len	= 16,
+-	}, { /*
+-	      *  SM4 Appendix A: Example Calculations.
+-	      *  Last 10 iterations of Example 2.
+-	      */
++	}, { /* Last 10 iterations of GB/T 32907-2016 Example 2. */
+ 		.key    = "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
+ 			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
+ 		.klen	= 16,
+@@ -10195,6 +10245,243 @@ static const struct cipher_testvec sm4_tv_template[] = {
+ 			  "\x59\x52\x98\xc7\xc6\xfd\x27\x1f"
+ 			  "\x4\x2\xf8\x4\xc3\x3d\x3f\x66",
+ 		.len	= 160
++	}, { /* A.2.1.1 SM4-ECB Example 1 */
++		.key	= "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
++			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\x5e\xc8\x14\x3d\xe5\x09\xcf\xf7"
++			  "\xb5\x17\x9f\x8f\x47\x4b\x86\x19"
++			  "\x2f\x1d\x30\x5a\x7f\xb1\x7d\xf9"
++			  "\x85\xf8\x1c\x84\x82\x19\x23\x04",
++		.len	= 32,
++	}, { /* A.2.1.2 SM4-ECB Example 2 */
++		.key	= "\xFE\xDC\xBA\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xAB\xCD\xEF",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\xC5\x87\x68\x97\xE4\xA5\x9B\xBB"
++			  "\xA7\x2A\x10\xC8\x38\x72\x24\x5B"
++			  "\x12\xDD\x90\xBC\x2D\x20\x06\x92"
++			  "\xB5\x29\xA4\x15\x5A\xC9\xE6\x00",
++		.len	= 32,
++	}
++};
++
++static const struct cipher_testvec sm4_cbc_tv_template[] = {
++	{ /* A.2.2.1 SM4-CBC Example 1 */
++		.key	= "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
++			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
++		.ctext	= "\x78\xEB\xB1\x1C\xC4\x0B\x0A\x48"
++			  "\x31\x2A\xAE\xB2\x04\x02\x44\xCB"
++			  "\x4C\xB7\x01\x69\x51\x90\x92\x26"
++			  "\x97\x9B\x0D\x15\xDC\x6A\x8F\x6D",
++		.len	= 32,
++	}, { /* A.2.2.2 SM4-CBC Example 2 */
++		.key	= "\xFE\xDC\xBA\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xAB\xCD\xEF",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
++		.ctext	= "\x0d\x3a\x6d\xdc\x2d\x21\xc6\x98"
++			  "\x85\x72\x15\x58\x7b\x7b\xb5\x9a"
++			  "\x91\xf2\xc1\x47\x91\x1a\x41\x44"
++			  "\x66\x5e\x1f\xa1\xd4\x0b\xae\x38",
++		.len	= 32,
++	}
++};
++
++static const struct cipher_testvec sm4_ctr_tv_template[] = {
++	{ /* A.2.5.1 SM4-CTR Example 1 */
++		.key	= "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
++			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
++			  "\xbb\xbb\xbb\xbb\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc"
++			  "\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xee\xee\xee\xee"
++			  "\xff\xff\xff\xff\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
++			  "\xbb\xbb\xbb\xbb\xbb\xbb\xbb\xbb",
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
++		.ctext	= "\xac\x32\x36\xcb\x97\x0c\xc2\x07"
++			  "\x91\x36\x4c\x39\x5a\x13\x42\xd1"
++			  "\xa3\xcb\xc1\x87\x8c\x6f\x30\xcd"
++			  "\x07\x4c\xce\x38\x5c\xdd\x70\xc7"
++			  "\xf2\x34\xbc\x0e\x24\xc1\x19\x80"
++			  "\xfd\x12\x86\x31\x0c\xe3\x7b\x92"
++			  "\x6e\x02\xfc\xd0\xfa\xa0\xba\xf3"
++			  "\x8b\x29\x33\x85\x1d\x82\x45\x14",
++		.len	= 64,
++	}, { /* A.2.5.2 SM4-CTR Example 2 */
++		.key	= "\xFE\xDC\xBA\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xAB\xCD\xEF",
++		.klen	= 16,
++		.ptext	= "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
++			  "\xbb\xbb\xbb\xbb\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc"
++			  "\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xee\xee\xee\xee"
++			  "\xff\xff\xff\xff\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
++			  "\xbb\xbb\xbb\xbb\xbb\xbb\xbb\xbb",
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
++		.ctext	= "\x5d\xcc\xcd\x25\xb9\x5a\xb0\x74"
++			  "\x17\xa0\x85\x12\xee\x16\x0e\x2f"
++			  "\x8f\x66\x15\x21\xcb\xba\xb4\x4c"
++			  "\xc8\x71\x38\x44\x5b\xc2\x9e\x5c"
++			  "\x0a\xe0\x29\x72\x05\xd6\x27\x04"
++			  "\x17\x3b\x21\x23\x9b\x88\x7f\x6c"
++			  "\x8c\xb5\xb8\x00\x91\x7a\x24\x88"
++			  "\x28\x4b\xde\x9e\x16\xea\x29\x06",
++		.len	= 64,
++	}
++};
++
++static const struct cipher_testvec sm4_ctr_rfc3686_tv_template[] = {
++	{
++		.key	= "\xae\x68\x52\xf8\x12\x10\x67\xcc"
++			  "\x4b\xf7\xa5\x76\x55\x77\xf3\x9e"
++			  "\x00\x00\x00\x30",
++		.klen	= 20,
++		.iv	= "\x00\x00\x00\x00\x00\x00\x00\x00",
++		.ptext	= "Single block msg",
++		.ctext	= "\x20\x9b\x77\x31\xd3\x65\xdb\xab"
++			  "\x9e\x48\x74\x7e\xbd\x13\x83\xeb",
++		.len	= 16,
++	}, {
++		.key	= "\x7e\x24\x06\x78\x17\xfa\xe0\xd7"
++			  "\x43\xd6\xce\x1f\x32\x53\x91\x63"
++			  "\x00\x6c\xb6\xdb",
++		.klen	= 20,
++		.iv	= "\xc0\x54\x3b\x59\xda\x48\xd9\x0b",
++		.ptext	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
++			  "\x10\x11\x12\x13\x14\x15\x16\x17"
++			  "\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f",
++		.ctext	= "\x33\xe0\x28\x01\x92\xed\xc9\x1e"
++			  "\x97\x35\xd9\x4a\xec\xd4\xbc\x23"
++			  "\x4f\x35\x9f\x1c\x55\x1f\xe0\x27"
++			  "\xe0\xdf\xc5\x43\xbc\xb0\x23\x94",
++		.len	= 32,
++	}
++};
++
++static const struct cipher_testvec sm4_ofb_tv_template[] = {
++	{ /* From: draft-ribose-cfrg-sm4-02, paragraph 12.2.3 */
++		.key	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.iv	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.ptext	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.ctext	= "\x69\x3d\x9a\x53\x5b\xad\x5b\xb1"
++			  "\x78\x6f\x53\xd7\x25\x3a\x70\x56"
++			  "\xf2\x07\x5d\x28\xb5\x23\x5f\x58"
++			  "\xd5\x00\x27\xe4\x17\x7d\x2b\xce",
++		.len	= 32,
++	}, { /* From: draft-ribose-cfrg-sm4-09, appendix A.2.3, Example 1 */
++		.key	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\xac\x32\x36\xcb\x86\x1d\xd3\x16"
++			  "\xe6\x41\x3b\x4e\x3c\x75\x24\xb7"
++			  "\x1d\x01\xac\xa2\x48\x7c\xa5\x82"
++			  "\xcb\xf5\x46\x3e\x66\x98\x53\x9b",
++		.len	= 32,
++	}, { /* From: draft-ribose-cfrg-sm4-09, appendix A.2.3, Example 2 */
++		.key	= "\xfe\xdc\xba\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xab\xcd\xef",
++		.klen	= 16,
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\x5d\xcc\xcd\x25\xa8\x4b\xa1\x65"
++			  "\x60\xd7\xf2\x65\x88\x70\x68\x49"
++			  "\x33\xfa\x16\xbd\x5c\xd9\xc8\x56"
++			  "\xca\xca\xa1\xe1\x01\x89\x7a\x97",
++		.len	= 32,
++	}
++};
++
++static const struct cipher_testvec sm4_cfb_tv_template[] = {
++	{ /* From: draft-ribose-cfrg-sm4-02, paragraph 12.2.4 */
++		.key	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.iv	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.ptext	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.ctext	= "\x69\x3d\x9a\x53\x5b\xad\x5b\xb1"
++			  "\x78\x6f\x53\xd7\x25\x3a\x70\x56"
++			  "\x9e\xd2\x58\xa8\x5a\x04\x67\xcc"
++			  "\x92\xaa\xb3\x93\xdd\x97\x89\x95",
++		.len	= 32,
++	}, { /* From: draft-ribose-cfrg-sm4-09, appendix A.2.4, Example 1 */
++		.key	= "\x01\x23\x45\x67\x89\xab\xcd\xef"
++			  "\xfe\xdc\xba\x98\x76\x54\x32\x10",
++		.klen	= 16,
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\xac\x32\x36\xcb\x86\x1d\xd3\x16"
++			  "\xe6\x41\x3b\x4e\x3c\x75\x24\xb7"
++			  "\x69\xd4\xc5\x4e\xd4\x33\xb9\xa0"
++			  "\x34\x60\x09\xbe\xb3\x7b\x2b\x3f",
++		.len	= 32,
++	}, { /* From: draft-ribose-cfrg-sm4-09, appendix A.2.4, Example 2 */
++		.key	= "\xfe\xdc\xba\x98\x76\x54\x32\x10"
++			  "\x01\x23\x45\x67\x89\xab\xcd\xef",
++		.klen	= 16,
++		.iv	= "\x00\x01\x02\x03\x04\x05\x06\x07"
++			  "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
++		.ptext	= "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb"
++			  "\xcc\xcc\xcc\xcc\xdd\xdd\xdd\xdd"
++			  "\xee\xee\xee\xee\xff\xff\xff\xff"
++			  "\xaa\xaa\xaa\xaa\xbb\xbb\xbb\xbb",
++		.ctext	= "\x5d\xcc\xcd\x25\xa8\x4b\xa1\x65"
++			  "\x60\xd7\xf2\x65\x88\x70\x68\x49"
++			  "\x0d\x9b\x86\xff\x20\xc3\xbf\xe1"
++			  "\x15\xff\xa0\x2c\xa6\x19\x2c\xc5",
++		.len	= 32,
+ 	}
+ };
+ 
