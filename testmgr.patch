@@ -36,9 +36,7 @@ index a0d68c0..9edbbaf 100644
  
  		src += bsize;
 diff --git a/crypto/testmgr.c b/crypto/testmgr.c
-old mode 100644
-new mode 100755
-index a1d4224..92e529d
+index a1d4224..709f797 100644
 --- a/crypto/testmgr.c
 +++ b/crypto/testmgr.c
 @@ -38,7 +38,7 @@
@@ -50,7 +48,53 @@ index a1d4224..92e529d
  MODULE_PARM_DESC(notests, "disable crypto self-tests");
  
  #ifdef CONFIG_CRYPTO_MANAGER_DISABLE_TESTS
-@@ -2661,6 +2661,13 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -2286,7 +2286,7 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
+ 		pr_err("alg: akcipher: encrypt test failed. err %d\n", err);
+ 		goto free_all;
+ 	}
+-	if (req->dst_len != vecs->c_size) {
++	if (req->dst_len < vecs->c_size) {
+ 		pr_err("alg: akcipher: encrypt test failed. Invalid output len\n");
+ 		err = -EINVAL;
+ 		goto free_all;
+@@ -2313,11 +2313,22 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
+ 		goto free_all;
+ 
+ 	memcpy(xbuf[0], vecs->c, vecs->c_size);
+-
+-	sg_init_one(&src, xbuf[0], vecs->c_size);
++	if (vecs->siggen_sigver_test)
++	{
++		sg_init_table(src_tab, 2);
++		sg_set_buf(&src_tab[0], xbuf[0], vecs->c_size);
++		sg_set_buf(&src_tab[1], vecs->m, vecs->m_size);
++	}
++	else
++	{
++		sg_init_one(&src, xbuf[0], vecs->c_size);
++	}
+ 	sg_init_one(&dst, outbuf_dec, out_len_max);
+ 	crypto_init_wait(&wait);
+-	akcipher_request_set_crypt(req, &src, &dst, vecs->c_size, out_len_max);
++	if (vecs->siggen_sigver_test)
++		akcipher_request_set_crypt(req, src_tab, NULL, vecs->c_size + vecs->m_size, 0);
++	else
++		akcipher_request_set_crypt(req, &src, &dst, vecs->c_size, out_len_max);
+ 
+ 	err = crypto_wait_req(vecs->siggen_sigver_test ?
+ 			      /* Run asymmetric signature verification */
+@@ -2328,6 +2339,10 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
+ 		pr_err("alg: akcipher: decrypt test failed. err %d\n", err);
+ 		goto free_all;
+ 	}
++
++	if (vecs->siggen_sigver_test)
++		goto free_all;
++
+ 	out_len = req->dst_len;
+ 	if (out_len < vecs->m_size) {
+ 		pr_err("alg: akcipher: decrypt test failed. "
+@@ -2661,6 +2676,13 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.suite = {
  			.cipher = __VECS(serpent_cbc_tv_template)
  		},
@@ -64,7 +108,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "cbc(twofish)",
  		.test = alg_test_skcipher,
-@@ -2684,6 +2691,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -2684,6 +2706,12 @@ static const struct alg_test_desc alg_test_descs[] = {
  				.dec = __VECS(aes_ccm_dec_tv_template)
  			}
  		}
@@ -77,7 +121,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "chacha20",
  		.test = alg_test_skcipher,
-@@ -2784,6 +2797,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -2784,6 +2812,12 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.suite = {
  			.cipher = __VECS(serpent_ctr_tv_template)
  		}
@@ -90,7 +134,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "ctr(twofish)",
  		.test = alg_test_skcipher,
-@@ -3037,6 +3056,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -3037,6 +3071,12 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.suite = {
  			.cipher = __VECS(sm4_tv_template)
  		}
@@ -103,7 +147,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "ecb(speck128)",
  		.test = alg_test_skcipher,
-@@ -3305,6 +3330,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -3305,6 +3345,12 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.alg = "ofb(paes)",
  		.test = alg_test_null,
  		.fips_allowed = 1,
@@ -116,7 +160,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "pcbc(fcrypt)",
  		.test = alg_test_skcipher,
-@@ -3343,6 +3374,12 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -3343,6 +3389,12 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.suite = {
  			.cipher = __VECS(aes_ctr_rfc3686_tv_template)
  		}
@@ -129,7 +173,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "rfc4106(gcm(aes))",
  		.test = alg_test_aead,
-@@ -3490,12 +3527,30 @@ static const struct alg_test_desc alg_test_descs[] = {
+@@ -3490,12 +3542,30 @@ static const struct alg_test_desc alg_test_descs[] = {
  		.suite = {
  			.hash = __VECS(sha512_tv_template)
  		}
@@ -160,7 +204,7 @@ index a1d4224..92e529d
  	}, {
  		.alg = "tgr128",
  		.test = alg_test_hash,
-@@ -3631,7 +3686,6 @@ static void alg_test_descs_check_order(void)
+@@ -3631,7 +3701,6 @@ static void alg_test_descs_check_order(void)
  {
  	int i;
  
@@ -168,7 +212,7 @@ index a1d4224..92e529d
  	if (alg_test_descs_checked)
  		return;
  
-@@ -3690,6 +3744,9 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
+@@ -3690,6 +3759,9 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
  		return 0;
  	}
  
@@ -178,7 +222,7 @@ index a1d4224..92e529d
  	alg_test_descs_check_order();
  
  	if ((type & CRYPTO_ALG_TYPE_MASK) == CRYPTO_ALG_TYPE_CIPHER) {
-@@ -3726,7 +3783,6 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
+@@ -3726,7 +3798,6 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
  	if (j >= 0 && j != i)
  		rc |= alg_test_descs[j].test(alg_test_descs + j, driver,
  					     type, mask);
@@ -186,7 +230,7 @@ index a1d4224..92e529d
  test_done:
  	if (fips_enabled && rc)
  		panic("%s: %s alg self test failed in fips mode!\n", driver, alg);
-@@ -3734,6 +3790,11 @@ test_done:
+@@ -3734,6 +3805,11 @@ test_done:
  	if (fips_enabled && !rc)
  		pr_info("alg: self-tests for %s (%s) passed\n", driver, alg);
  
@@ -198,18 +242,16 @@ index a1d4224..92e529d
  	return rc;
  
  notest:
-@@ -3746,3 +3807,4 @@ non_fips_alg:
+@@ -3746,3 +3822,4 @@ non_fips_alg:
  #endif /* CONFIG_CRYPTO_MANAGER_DISABLE_TESTS */
  
  EXPORT_SYMBOL_GPL(alg_test);
 +
 diff --git a/crypto/testmgr.h b/crypto/testmgr.h
-old mode 100644
-new mode 100755
-index 173111c..3c873fe
+index 173111c..bea5bf8 100644
 --- a/crypto/testmgr.h
 +++ b/crypto/testmgr.h
-@@ -2309,6 +2309,61 @@ static const struct hash_testvec crct10dif_tv_template[] = {
+@@ -2309,6 +2309,140 @@ static const struct hash_testvec crct10dif_tv_template[] = {
  	}
  };
  
@@ -217,6 +259,7 @@ index 173111c..3c873fe
 + * SM2 test vectors.
 + */
 +static const struct akcipher_testvec sm2_tv_template[] = {
++#if 0
 +	{ /* Generated from openssl */
 +	.key =
 +	"\x04"
@@ -266,12 +309,90 @@ index 173111c..3c873fe
 +	.public_key_vec = true,
 +	.siggen_sigver_test = true,
 +	},
++#endif
++	{ /* From openssl */
++	.key =
++	/* privkey "3945208F7B2144B13F36E38AC6D39F95889393692860B51A42FB81EF4DF7C5B8" */
++	"\x39\x45\x20\x8F\x7B\x21\x44\xB1\x3F\x36\xE3\x8A\xC6\xD3\x9F\x95"
++	"\x88\x93\x93\x69\x28\x60\xB5\x1A\x42\xFB\x81\xEF\x4D\xF7\xC5\xB8"
++	/* pub key */
++    "\x04"
++    "\x09\xf9\xdf\x31\x1e\x54\x21\xa1\x50\xdd\x7d\x16\x1e\x4b\xc5\xc6"
++    "\x72\x17\x9f\xad\x18\x33\xfc\x07\x6b\xb0\x8f\xf3\x56\xf3\x50\x20"
++    "\xcc\xea\x49\x0c\xe2\x67\x75\xa5\x2d\xc6\xea\x71\x8c\xc1\xaa\x60"
++    "\x0a\xed\x05\xfb\xf3\x5e\x08\x4a\x66\x32\xf6\x07\x2d\xa9\xad\x13"
++    /* ephemeral nonce k */
++	"\x59\x27\x6E\x27\xD5\x06\x86\x1A\x16\x68\x0F\x3A\xD9\xC0\x2D\xCC"
++	"\xEF\x3C\xC1\xFA\x3C\xDB\xE4\xCE\x6D\x54\xB8\x0D\xEA\xC1\xBC\x21",
++	.key_len = 32 + 65 + 32,
++	.c =
++    /*
++     * expected ciphertext, the field values are from GM/T 0003.5-2012
++     * (Annex C), but serialized following the ASN.1 format specified
++     * in GM/T 0009-2012 (Sec. 7.2).
++     */
++    //"\x30\x7C" /* SEQUENCE, 0x7c bytes */
++    //"\x02\x20" /* INTEGER, 0x20 bytes */
++	"\x04"
++    "\x04\xEB\xFC\x71\x8E\x8D\x17\x98\x62\x04\x32\x26\x8E\x77\xFE\xB6"
++	"\x41\x5E\x2E\xDE\x0E\x07\x3C\x0F\x4F\x64\x0E\xCD\x2E\x14\x9A\x73"
++    //"\x02\x21" /* INTEGER, 0x21 bytes */
++    //"\x00" /* leading 00 due to DER for pos. int with topmost bit set */
++    "\xE8\x58\xF9\xD8\x1E\x54\x30\xA5\x7B\x36\xDA\xAB\x8F\x95\x0A\x3C"
++	"\x64\xE6\xEE\x6A\x63\x09\x4D\x99\x28\x3A\xFF\x76\x7E\x12\x4D\xF0"
++    //"\x04\x20" /* OCTET STRING, 0x20 bytes */
++    "\x59\x98\x3C\x18\xF8\x09\xE2\x62\x92\x3C\x53\xAE\xC2\x95\xD3\x03"
++	"\x83\xB5\x4E\x39\xD6\x09\xD1\x60\xAF\xCB\x19\x08\xD0\xBD\x87\x66"
++    //"\x04\x13" /* OCTET STRING, 0x13 bytes */
++    "\x21\x88\x6C\xA9\x89\xCA\x9C\x7D\x58\x08\x73\x07\xCA\x93\x09\x2D"
++	"\x65\x1E\xFA",
++	.c_size = 1 + 32 * 2 + 32 + 19,
++    /* plaintext message */
++    /* "encryption standard", */
++	.m =
++	"\x65\x6e\x63\x72\x79\x70\x74\x69\x6f\x6e\x20\x73\x74\x61\x6e\x64"
++	"\x61\x72\x64",
++	.m_size = 19,
++	.public_key_vec = false, // have private key
++	.siggen_sigver_test = false, // not for sign and verify
++	},
++	{ /* From openssl */
++	.key =
++	/* privkey "3945208F7B2144B13F36E38AC6D39F95889393692860B51A42FB81EF4DF7C5B8" */
++	"\x39\x45\x20\x8F\x7B\x21\x44\xB1\x3F\x36\xE3\x8A\xC6\xD3\x9F\x95"
++	"\x88\x93\x93\x69\x28\x60\xB5\x1A\x42\xFB\x81\xEF\x4D\xF7\xC5\xB8"
++	/* pub key */
++    "\x04"
++    "\x09\xf9\xdf\x31\x1e\x54\x21\xa1\x50\xdd\x7d\x16\x1e\x4b\xc5\xc6"
++    "\x72\x17\x9f\xad\x18\x33\xfc\x07\x6b\xb0\x8f\xf3\x56\xf3\x50\x20"
++    "\xcc\xea\x49\x0c\xe2\x67\x75\xa5\x2d\xc6\xea\x71\x8c\xc1\xaa\x60"
++    "\x0a\xed\x05\xfb\xf3\x5e\x08\x4a\x66\x32\xf6\x07\x2d\xa9\xad\x13"
++    /* ephemeral nonce k */
++	"\x59\x27\x6E\x27\xD5\x06\x86\x1A\x16\x68\x0F\x3A\xD9\xC0\x2D\xCC"
++	"\xEF\x3C\xC1\xFA\x3C\xDB\xE4\xCE\x6D\x54\xB8\x0D\xEA\xC1\xBC\x21",
++	.key_len = 32 + 65 + 32,
++	.c =
++    /* signature R, 0x20 bytes */
++	"\xF5\xA0\x3B\x06\x48\xD2\xC4\x63\x0E\xEA\xC5\x13\xE1\xBB\x81\xA1"
++	"\x59\x44\xDA\x38\x27\xD5\xB7\x41\x43\xAC\x7E\xAC\xEE\xE7\x20\xB3"
++    /* signature S, 0x20 bytes */
++	"\xB1\xB6\xAA\x29\xDF\x21\x2F\xD8\x76\x31\x82\xBC\x0D\x42\x1C\xA1"
++	"\xBB\x90\x38\xFD\x1F\x7F\x42\xD4\x84\x0B\x69\xC4\x85\xBB\xC1\xAA",
++	.c_size = 32 * 2,
++    /* plaintext message */
++    /* "message digest" */
++	.m =
++	"\x6d\x65\x73\x73\x61\x67\x65\x20\x64\x69\x67\x65\x73\x74",
++	.m_size = 14,
++	.public_key_vec = false, // have private key
++	.siggen_sigver_test = true, // test for verify and sign
++	},
 +};
 +
  /* Example vectors below taken from
   * http://www.oscca.gov.cn/UpFile/20101222141857786.pdf
   *
-@@ -2333,7 +2388,6 @@ static const struct hash_testvec sm3_tv_template[] = {
+@@ -2333,7 +2467,6 @@ static const struct hash_testvec sm3_tv_template[] = {
  			0x7E, 0x76, 0x4A, 0x91, 0xA1, 0x8C, 0xCB, 0x82,
  			0xF1, 0x91, 0x7A, 0x29, 0xC8, 0x6C, 0x5E, 0x88 }
  	}, {
@@ -279,7 +400,7 @@ index 173111c..3c873fe
  		.plaintext = "abc",
  		.psize = 3,
  		.digest = (u8 *)(u8 []) {
-@@ -2350,7 +2404,6 @@ static const struct hash_testvec sm3_tv_template[] = {
+@@ -2350,7 +2483,6 @@ static const struct hash_testvec sm3_tv_template[] = {
  			0x40, 0x46, 0x2A, 0xD2, 0x8D, 0xCC, 0x6D, 0x63,
  			0xAD, 0xB2, 0x4D, 0x5C, 0x20, 0xA6, 0x15, 0x95 }
  	}, {
@@ -287,7 +408,7 @@ index 173111c..3c873fe
  		.plaintext = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdab"
  			     "cdabcdabcdabcdabcd",
  		.psize = 64,
-@@ -10138,7 +10191,7 @@ static const struct cipher_testvec serpent_xts_tv_template[] = {
+@@ -10138,7 +10270,7 @@ static const struct cipher_testvec serpent_xts_tv_template[] = {
   */
  
  static const struct cipher_testvec sm4_tv_template[] = {
@@ -296,7 +417,7 @@ index 173111c..3c873fe
  		.key	= "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
  			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
  		.klen	= 16,
-@@ -10147,10 +10200,7 @@ static const struct cipher_testvec sm4_tv_template[] = {
+@@ -10147,10 +10279,7 @@ static const struct cipher_testvec sm4_tv_template[] = {
  		.ctext	= "\x68\x1E\xDF\x34\xD2\x06\x96\x5E"
  			  "\x86\xB3\xE9\x4F\x53\x6E\x42\x46",
  		.len	= 16,
@@ -308,7 +429,7 @@ index 173111c..3c873fe
  		.key    = "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
  			  "\xFE\xDC\xBA\x98\x76\x54\x32\x10",
  		.klen	= 16,
-@@ -10195,6 +10245,243 @@ static const struct cipher_testvec sm4_tv_template[] = {
+@@ -10195,6 +10324,243 @@ static const struct cipher_testvec sm4_tv_template[] = {
  			  "\x59\x52\x98\xc7\xc6\xfd\x27\x1f"
  			  "\x4\x2\xf8\x4\xc3\x3d\x3f\x66",
  		.len	= 160
